@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PTIPOTE Proto Zone 0 V8.5</title>
+<style>
+:root{--bg:#314149;--paper:#f2ecdf;--paper2:#e5dccb;--text:#243038;--green:#7a9c8a;--gold:#d3a85f;--red:#b36a5e;--blue:#6f8aa0;--road:#cdbb9e;--grass:#7f9a72;--wall:#8f735f}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.08);color:white;padding:12px 16px;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.stats{display:flex;gap:10px;flex-wrap:wrap;font-size:14px;align-items:center}.hud-click{text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+main{width:min(1180px,100%);margin:auto;padding:16px}.screen{display:none}.screen.active{display:block}
+.grid{display:grid;gap:12px}.grid2{grid-template-columns:repeat(2,minmax(0,1fr))}.grid3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.house{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.card,.zone,.pti,.mission{background:var(--paper);border-radius:14px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,.12)}
+.zone,.pti{cursor:pointer;border:2px solid transparent}.zone:hover,.pti:hover{border-color:var(--green)}
+.badge{display:inline-block;background:var(--paper2);border-radius:999px;padding:4px 8px;font-size:12px;margin-bottom:8px}.small{font-size:13px;color:#69727a}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+button{border:0;border-radius:10px;padding:10px 14px;background:var(--green);color:white;font-weight:700;cursor:pointer}
+button.secondary{background:#6b7f8c}button.warning{background:var(--gold);color:#2b2418}button.danger{background:var(--red)}button:disabled{opacity:.45;cursor:not-allowed}
+.drawer{position:fixed;left:0;right:0;bottom:0;z-index:100;max-height:82vh;overflow:auto;background:var(--paper);border-radius:18px 18px 0 0;padding:16px;box-shadow:0 -8px 30px rgba(0,0,0,.3);transform:translateY(105%);transition:.2s}
+.drawer.open{transform:translateY(0)}.drawer-head{display:flex;justify-content:space-between;align-items:center}.overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:90;opacity:0;pointer-events:none}.overlay.show{opacity:1;pointer-events:auto}
+.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#1f2a30;color:white;padding:12px 16px;border-radius:12px;opacity:0;z-index:120}.toast.show{opacity:1}
+.progress{height:12px;background:#d6ccba;border-radius:999px;overflow:hidden;margin:8px 0}.bar{height:100%;width:0%;background:var(--green);transition:.2s}
+.levels{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.level.selected{background:var(--gold);color:#2b2418}
+.pad{display:grid;grid-template-columns:80px 80px 80px;gap:8px;justify-content:center;margin:20px auto}.pad button{height:60px;font-size:24px}.pad button.expected{background:var(--gold);color:#2b2418;box-shadow:0 0 0 4px rgba(211,168,95,.25)}
+#villageCanvas{width:720px;max-width:100%;height:auto;aspect-ratio:3/2;background:#7f9a72;border-radius:16px;display:block;margin:auto;box-shadow:0 2px 12px rgba(0,0,0,.25);cursor:pointer}
+.plus{border:2px dashed #8aa28f;background:#eef0e4}.houseup{border:2px dashed #d3a85f;background:#f7edd8}
+.bag{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.slot{width:42px;height:42px;border-radius:8px;background:#d8d2c4;display:flex;align-items:center;justify-content:center}.qty button{min-width:46px}
+@media(max-width:900px){.grid2,.grid3,.house,.levels{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+<div><strong>PTIPOTE Proto Zone 0 - V8.5</strong><div class="small" id="screenName">Maison</div></div>
+<div class="stats">
+<span>💰 <b id="money">0</b></span><span>🍃 <b id="organic">0</b></span><span>🪨 <b id="mineral">0</b></span>
+<span>🥤 <b id="drinks">0</b></span><span>🍱 <b id="meals">0</b></span><span>🍽️ <b id="menus">0</b></span>
+<span>🧰 <b id="filters">0</b></span><span>⚙️ <b id="pumps">0</b></span><span>🎒 <b id="systems">0</b></span>
+<span>🍲 <b id="food">3</b></span><span>🛏️ <b id="slots">0/3</b></span><span class="hud-click" id="missionHud">📦 Missions <b id="missionsCount">0</b></span><button data-go="inventory">📦 Inventaire</button><button data-go="wardrobe">👕 Garde-robe</button>
+</div>
+</header>
+
+<main>
+<section id="home" class="screen active">
+<h2>Maison</h2>
+<div class="house">
+<div class="zone" id="goBio"><span class="badge">Bio-ordinateur</span><h3>Scanner / missions / maison</h3><p class="small">P’TIPOTES, missions, upgrade maison.</p></div>
+<div class="zone" id="goTrain"><span class="badge">Terrain</span><h3>Entraînement</h3><p class="small">Niveaux verrouillés par pratique.</p></div>
+<div class="zone" id="goRoom"><span class="badge">Chambre</span><h3>Alcôves</h3><p class="small">Voir tous les P’TIPOTES et acheter des alcôves.</p></div>
+<div class="zone" id="goVillage"><span class="badge">Village</span><h3>Sortir</h3><p class="small">Cuisine, atelier, boutique, marché, missions.</p></div>
+</div>
+</section>
+
+<section id="bio" class="screen">
+<h2>Bio-ordinateur</h2>
+<div class="card actions"><button id="scan">Simuler scan</button><button id="loan" class="warning">Co-training</button><button id="reset" class="danger">Reset</button><button data-go="home" class="secondary">Retour maison</button></div>
+<div class="card actions"><button id="tabP">P’TIPOTES</button><button id="tabM" class="warning">Missions</button><button id="tabH" class="secondary">Maison</button></div>
+<div class="card" id="panelP"><h3>P’TIPOTES de la maison</h3><div id="bioList"></div></div>
+<div class="card" id="panelM" style="display:none"><h3>P’TIPOTES en mission</h3><div id="missionMonitor"></div></div>
+<div class="card" id="panelH" style="display:none"><h3>Maison</h3><div id="housePanel"></div></div>
+</section>
+
+<section id="room" class="screen">
+<h2>Chambre</h2><div id="roomList" class="grid grid3"></div><div class="actions"><button data-go="home" class="secondary">Retour maison</button></div>
+</section>
+
+<section id="sheet" class="screen">
+<h2>Fiche P’TIPOTE</h2><div class="card" id="sheetContent"></div>
+<div class="actions"><button id="feed">Nourrir</button><button id="cuddle" class="warning">Câliner</button><button id="trainFrom">Entraîner</button><button id="missionFrom" class="secondary">Mission</button><button data-go="room" class="secondary">Retour chambre</button></div>
+</section>
+
+<section id="train" class="screen">
+<h2>Entraînement</h2>
+<div class="grid grid2">
+<div class="card"><h3>Difficulté</h3><p class="small">Pour débloquer un niveau, réussis le niveau précédent 3 fois. Niveaux 7 à 9 plus tard.</p><div id="levels" class="levels"></div></div>
+<div class="card"><div id="trainMeta"></div><p>Direction: <b id="dir">-</b></p><p>Temps <b id="time">30</b>s • <span id="hearts">❤️❤️❤️</span> • XP gagné <b id="score">0</b></p>
+<div class="pad"><div></div><button id="up">⬆</button><div></div><button id="left">⬅</button><button id="down">⬇</button><button id="right">➡</button></div>
+<div class="actions"><button id="startTrain" class="warning">Lancer</button><button data-go="home" class="secondary">Retour</button></div></div>
+</div>
+</section>
+
+<section id="village" class="screen">
+<h2>Village</h2>
+<p class="small">Clique directement sur un bâtiment ou une mission.</p>
+<div class="card"><canvas id="villageCanvas" width="720" height="480"></canvas></div>
+</section>
+
+<section id="shop" class="screen"><h2>Boutique</h2><div class="card"><p>La boutique vend uniquement des plats. C’est un dépannage cher pour continuer à jouer.</p><button id="buyFood">Acheter un plat 🍲 (6💰)</button><button data-go="village" class="secondary">Retour village</button></div></section>
+
+<section id="workshop" class="screen"><h2>Cuisine / Atelier</h2>
+<div class="card"><h3>Caisses de craft</h3><div id="cratePanel"></div></div>
+<div class="card"><h3>Choisir un ou plusieurs artisans</h3><div id="artisanList" class="grid grid3"></div></div>
+<div class="card"><h3>Cuisine</h3><div class="actions">
+<button id="addDrink">Boisson 🥤 (1 🍃)</button>
+<button id="addMeal" class="warning">Plat 🍱 (2 🍃)</button>
+<button id="addMenu" class="warning">Menu 🍽️ (1 🥤 + 1 🍱)</button>
+</div></div>
+<div class="card"><h3>Atelier</h3><div class="actions">
+<button id="addFilter">Filtre 🧰 (1 🪨)</button>
+<button id="addPump" class="warning">Pompe ⚙️ (1 🪨 + 1 🍃)</button>
+<button id="addSystem" class="warning">Filtration portative 🎒 (1 🧰 + 1 ⚙️)</button>
+<button data-go="village" class="secondary">Retour village</button>
+</div></div>
+<div class="card"><h3>File d’attente</h3><div id="craftQueue"></div></div>
+</section>
+
+<section id="market" class="screen"><h2>Marché</h2><p class="small">Le P’TIPOTE vend automatiquement les objets produits. 1 client toutes les 30s. 10% de vente, 15% pour Fongique.</p>
+<div class="card"><h3>Choisir vendeur</h3><div id="sellerList" class="grid grid3"></div></div><div class="card"><h3>Statut</h3><div id="marketStatus"></div><button data-go="village" class="secondary">Retour village</button></div>
+</section>
+
+<section id="external" class="screen"><h2>Mini-jeu externe</h2><div class="card"><iframe id="miniFrame" style="width:100%;height:220px;border:0;border-radius:12px;background:white"></iframe><div class="actions"><button id="simulateWin">Simuler victoire joueur</button><button data-go="village" class="secondary">Retour village</button></div></div></section>
+
+<section id="inventory" class="screen">
+<h2>Inventaire</h2>
+<div class="card actions"><button id="invStockBtn">Stock</button><button id="invEquipBtn" class="warning">Équipement</button><button id="invUpgradeBtn" class="secondary">Améliorations</button><button data-go="home" class="secondary">Retour</button></div>
+<div class="card" id="invPanel"></div>
+</section>
+
+<section id="wardrobe" class="screen">
+<h2>Garde-robe</h2>
+<div id="wardrobeContent" class="grid grid2"></div>
+<div class="actions"><button data-go="home" class="secondary">Retour</button></div>
+</section>
+</main>
+
+<div id="overlay" class="overlay"></div>
+<div id="drawerTrain" class="drawer"><div class="drawer-head"><h3>Sélection entraînement</h3><button id="closeTrain" class="secondary">Fermer</button></div><div id="trainList" class="grid grid3"></div></div>
+<div id="drawerMission" class="drawer"><div class="drawer-head"><h3>Sélection mission</h3><button id="closeMission" class="secondary">Fermer</button></div><div id="missionList"></div></div>
+<div id="toast" class="toast"></div>
+
+<script>
+const KEY="ptipote_v8_5";
+const screens=["home","bio","room","sheet","train","village","shop","workshop","market","external","inventory","wardrobe"].reduce((a,id)=>(a[id]=document.getElementById(id),a),{});
+const names={home:"Maison",bio:"Bio-ordinateur",room:"Chambre",sheet:"Fiche",train:"Entraînement",village:"Village",shop:"Boutique",workshop:"Cuisine / Atelier",market:"Marché",external:"Mini-jeu externe",inventory:"Inventaire",wardrobe:"Garde-robe"};
+const types=["Végétal","Minéral","Fongique"];
+const xpTable=[0,100,250,400,550,675,800,900,1050,1200,1400,1600,1850,2100,2400,2700,3000,3400,3800,4200,4700];
+const missions={defense:{id:"defense",emoji:"🛡️",name:"Défense",dur:45000,money:40,reward:"money",pref:["Minéral"]},search:{id:"search",emoji:"🔎",name:"Recherche produit",dur:40000,reward:"mat",pref:["Végétal","Fongique"]},caravan:{id:"caravan",emoji:"🚚",name:"Caravane",dur:50000,money:55,reward:"money",pref:["Végétal","Fongique"]}};
+const pois=[
+{x:340,y:390,w:80,h:55,type:"home",emoji:"🏠",name:"Maison"},
+{x:80,y:250,w:70,h:55,type:"shop",emoji:"🛒",name:"Boutique"},
+{x:210,y:210,w:75,h:55,type:"workshop",emoji:"🍽️",name:"Cuisine/Atelier"},
+{x:480,y:210,w:75,h:55,type:"market",emoji:"🏪",name:"Marché"},
+{x:65,y:40,w:70,h:55,type:"defense",emoji:"🛡️",name:"Défense"},
+{x:330,y:30,w:70,h:55,type:"search",emoji:"🔎",name:"Recherche"},
+{x:600,y:45,w:70,h:55,type:"caravan",emoji:"🚚",name:"Caravane"},
+{x:350,y:130,w:70,h:55,type:"zone1",emoji:"🚧",name:"Zone 1"},
+{x:120,y:360,w:60,h:45,type:"decor",emoji:"🏘️",name:"Maison"},
+{x:560,y:350,w:60,h:45,type:"decor",emoji:"🏡",name:"Maison"}
+];
+function fresh(){return{money:0,food:3,organic:0,mineral:0,drinks:0,meals:0,menus:0,filters:0,pumps:0,systems:0,houseSlots:3,maxHouseSlots:6,houseLevel:1,ptipotes:[],created:0,crates:1,craftQueue:[],market:null,envelopes:[{id:"env1",name:"Enveloppe légère",slots:4,equippedTo:null},{id:"env2",name:"Enveloppe cargo",slots:6,equippedTo:null}],ptibugs:[{id:"bug1",name:"PTIBUG Spore",equippedTo:null}],upgrades:{bag3:1}};}
+let state=(()=>{try{return Object.assign(fresh(),JSON.parse(localStorage.getItem(KEY)||"{}"))}catch(e){return fresh()}})();
+function repairState(){state.crates=Math.max(1,state.crates||1);["meals","menus","pumps","systems","drinks","filters","organic","mineral","money","food"].forEach(k=>state[k]=state[k]||0);if(!Array.isArray(state.ptipotes))state.ptipotes=[];if(!Array.isArray(state.craftQueue))state.craftQueue=[];if(!state.envelopes)state.envelopes=[{id:"env1",name:"Enveloppe légère",slots:4,equippedTo:null},{id:"env2",name:"Enveloppe cargo",slots:6,equippedTo:null}];if(!state.ptibugs)state.ptibugs=[{id:"bug1",name:"PTIBUG Spore",equippedTo:null}];if(!state.upgrades)state.upgrades={bag3:1};if(state.market&&!state.ptipotes.some(p=>p.id===state.market.pid))state.market=null;state.ptipotes.forEach(p=>{if(p.status==="market"&&(!state.market||state.market.pid!==p.id))p.status="home";});}
+repairState();
+
+let selected=null,bioTab="ptipotes",missionId=null,trainDiff=1,artisans=[],pendingExternal="defense",active=false,answerT=null,tick=null;
+window.score=0;window.hearts=3;window.time=30;window.dir=null;
+
+function save(){localStorage.setItem(KEY,JSON.stringify(state));hud()}
+function toast(t){let e=document.getElementById("toast");e.textContent=t;e.classList.add("show");clearTimeout(window.tt);window.tt=setTimeout(()=>e.classList.remove("show"),1800)}
+function go(id){Object.values(screens).forEach(s=>s.classList.remove("active"));screens[id].classList.add("active");screenName.textContent=names[id];render();if(id==="village")setTimeout(renderVillage,20)}
+function hud(){money.textContent=state.money;organic.textContent=state.organic;mineral.textContent=state.mineral;drinks.textContent=state.drinks;meals.textContent=state.meals;menus.textContent=state.menus;filters.textContent=state.filters;pumps.textContent=state.pumps;systems.textContent=state.systems;food.textContent=state.food;slots.textContent=`${state.ptipotes.length}/${state.houseSlots}`;missionsCount.textContent=countJobs()}
+function countJobs(){return state.ptipotes.filter(p=>["mission","mission_done","workshop","market","sleep"].includes(p.status)).length+state.craftQueue.length}
+function emoji(t){return t==="Végétal"?"🌿":t==="Minéral"?"🪨":"🍄"}
+function pby(id){return state.ptipotes.find(p=>p.id===id)}
+function pcur(){return pby(selected)}
+function xpNext(l){return xpTable[l]||Math.round(4700+(l-20)*600)}
+function addP(loan=false){if(state.ptipotes.length>=state.houseSlots){toast("Plus d’alcôves");return}state.created++;let type=types[(state.created-1)%3];let p={id:"p"+Date.now()+Math.random(),name:(loan?"Prêt-":"Pti-")+state.created,type,level:1,xp:0,energy:4,maxEnergy:4,cuddle:0,status:"home",trainingDone:{}};state.ptipotes.push(p);selected=p.id;go("sheet")}
+function status(p){if(p.status==="home")return"Prêt";if(p.status==="sleep")return`Sommeil • ${p.energy}/${p.maxEnergy}`;if(p.status==="mission")return`Mission • ${Math.max(0,Math.ceil((p.missionEnd-Date.now())/1000))}s`;if(p.status==="mission_done")return"Mission terminée";if(p.status==="workshop")return"Atelier";if(p.status==="market")return"Marché";return p.status}
+function update(){let now=Date.now();state.ptipotes.forEach(p=>{if(p.status==="mission"&&now>=p.missionEnd){p.status="mission_done";if(p.energy<=0)p.postActionSleep=true} if(p.status==="sleep"){if(!p.sleepLast)p.sleepLast=now;let ticks=Math.floor((now-p.sleepLast)/60000);if(ticks>0){p.energy=Math.min(p.maxEnergy,p.energy+ticks);p.sleepLast+=ticks*60000}if(p.energy>=Math.ceil(p.maxEnergy/3))p.status="home"}});processCraft();processMarket()}
+function spendStart(p,amount){if(!p||p.status!=="home"||p.energy<amount)return false;p.energy-=amount;if(p.energy===0)p.postActionSleep=true;return true}
+function canFeed(p){return p&&p.energy>=1&&p.status!=="mission"&&p.status!=="workshop"&&p.status!=="market"}
+function wouldSleep(p,cost){return p&&p.energy-cost<=0}
+function levelUp(p){let up=false;while(p.xp>=xpNext(p.level)){p.xp-=xpNext(p.level);p.level++;if(p.level%2===0)p.maxEnergy++;up=true}return up}
+function addXp(p,amount){if(!p||amount<=0)return;p.xp+=Math.round(amount);if(levelUp(p))toast(p.name+" monte de niveau")}
+function trainingXpValue(){return trainDiff+(pcur()?.cuddle||0)}
+
+function renderBio(){panelP.style.display=bioTab==="ptipotes"?"block":"none";panelM.style.display=bioTab==="missions"?"block":"none";panelH.style.display=bioTab==="house"?"block":"none";bioList.innerHTML=state.ptipotes.length?state.ptipotes.map(cardSmall).join(""):'<div class="pti">Aucun P’TIPOTE.</div>';renderMonitor();renderHousePanel()}
+function cardSmall(p){return`<div class="pti"><b>${emoji(p.type)} ${p.name}</b><p class="small">${p.type} • Niv.${p.level} • XP ${p.xp}/${xpNext(p.level)} • ⚡${p.energy}/${p.maxEnergy} • Câlin +${p.cuddle} • ${status(p)}</p></div>`}
+function alcoveCost(){return 80+state.houseSlots*40}
+function renderHousePanel(){let price=500,min=20,org=15;housePanel.innerHTML=`<p>Alcôves: <b>${state.houseSlots}</b> / ${state.maxHouseSlots}</p><p>Créer une alcôve: <b>${alcoveCost()}💰</b></p><p>Upgrade maison: <b>${price}💰 + ${min}🪨 + ${org}🍃</b></p><div class="actions"><button id="buyAlcove">Créer alcôve +1</button><button id="upgradeHouse" class="warning">Améliorer maison</button></div>`;buyAlcove.onclick=buyAlcoveFn;upgradeHouse.onclick=upgradeHouseFn}
+function buyAlcoveFn(){if(state.houseSlots>=state.maxHouseSlots){toast("Améliore la maison pour plus de stockage");return}let cost=alcoveCost();if(state.money<cost){toast("Pas assez d’argent: "+cost);return}state.money-=cost;state.houseSlots++;render()}
+function upgradeHouseFn(){let price=500,min=20,org=15;if(state.money<price||state.mineral<min||state.organic<org){toast("Ressources insuffisantes");return}state.money-=price;state.mineral-=min;state.organic-=org;state.maxHouseSlots+=3;state.houseLevel++;render()}
+function renderRoom(){let h="";for(let i=0;i<state.houseSlots;i++){let p=state.ptipotes[i];h+=p?`<div class="pti"><b>${emoji(p.type)} ${p.name}</b><p class="small">${p.type}<br>Niv.${p.level}<br>XP ${p.xp}/${xpNext(p.level)}<br>⚡${p.energy}/${p.maxEnergy}<br>${status(p)}</p><button data-open="${p.id}">Ouvrir</button></div>`:`<div class="pti"><span class="badge">Vide</span><b>Alcôve libre</b></div>`}for(let i=0;i<3;i++){h+=`<div class="pti plus"><b>＋ Nouvelle alcôve</b><p class="small">Payer ${alcoveCost()}💰 pour créer une alcôve.</p><button data-buy-alcove>Créer</button></div>`}h+=`<div class="pti houseup"><b>🏠⬆️ Améliorer maison</b><p class="small">Va dans Bio-ordinateur → Maison.</p><button data-house-up>Voir upgrade</button></div>`;roomList.innerHTML=h;roomList.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>{selected=b.dataset.open;go("sheet")});roomList.querySelectorAll("[data-buy-alcove]").forEach(b=>b.onclick=buyAlcoveFn);roomList.querySelector("[data-house-up]").onclick=()=>{bioTab="house";go("bio")}}
+function renderSheet(){let p=pcur();if(!p){sheetContent.innerHTML='<div class="pti">Aucun P’TIPOTE.</div>';return}let sleepBlock="";if(p.status==="sleep"){let need=Math.ceil(p.maxEnergy/3);let pct=Math.min(100,Math.round((p.energy/need)*100));let next=60;if(p.sleepLast)next=Math.max(0,60-Math.floor((Date.now()-p.sleepLast)/1000));sleepBlock=`<p>😴 Sommeil: réveil à ${need}⚡</p><div class="progress"><div class="bar" style="width:${pct}%"></div></div><p class="small">Prochaine récupération dans ${next}s</p>`}sheetContent.innerHTML=`<h3>${emoji(p.type)} ${p.name}</h3><p>Type: <b>${p.type}</b></p><p>Niveau: <b>${p.level}</b></p><p>XP: <b>${p.xp}</b> / ${xpNext(p.level)}</p><div class="progress"><div class="bar" style="width:${Math.min(100,Math.round(p.xp/xpNext(p.level)*100))}%"></div></div><p>Énergie: <b>${p.energy}</b> / ${p.maxEnergy}</p>${sleepBlock}<p>Bonus câlin: <b>+${p.cuddle} XP / bonne réponse</b></p><p>Statut: ${status(p)}</p>`;feed.disabled=!canFeed(p)||state.food<=0;cuddle.disabled=p.status!=="home";trainFrom.disabled=!(p.status==="home"&&p.energy>0);missionFrom.disabled=p.status!=="home"}
+function renderTrainList(){trainList.innerHTML=state.ptipotes.map(p=>`<div class="pti"><b>${emoji(p.type)} ${p.name}</b><p class="small">Niv.${p.level} • ⚡${p.energy}/${p.maxEnergy} • ${status(p)}</p><button data-train="${p.id}" ${!(p.status==="home"&&p.energy>0)?"disabled":""}>Choisir</button></div>`).join("")||'<div class="pti">Aucun.</div>';trainList.querySelectorAll("[data-train]").forEach(b=>b.onclick=()=>{selected=b.dataset.train;closeDrawer("train");go("train")})}
+function isTrainingUnlocked(p,lvl){if(lvl>6)return false;if(lvl===1)return true;return (p.trainingDone?.[lvl-1]||0)>=3}
+function renderLevels(){let p=pcur();let h="";for(let i=1;i<=9;i++){let done=p?.trainingDone?.[i]||0;let locked=!p||!isTrainingUnlocked(p,i);let text=i>6?"Plus tard":(locked?`Réussir niv.${i-1} 3 fois`:`Réussites: ${done}/3`);h+=`<button class="level ${trainDiff===i?"selected":""}" data-l="${i}" ${locked?"disabled":""}>Niv.${i}${locked?" 🔒":""}<br><span class="small">${text}<br>session ${10+(i-1)*5}s • réponse ${(3-(i-1)*.35).toFixed(1)}s • ${i}XP • 1⚡</span></button>`}levels.innerHTML=h;levels.querySelectorAll("[data-l]").forEach(b=>b.onclick=()=>{trainDiff=+b.dataset.l;renderLevels();renderTrainMeta()})}
+function updateHearts(){let out="";for(let i=1;i<=3;i++)out+=i<=window.hearts?"❤️":"🤍";hearts.innerHTML=out}
+function loseHeart(){if(!active)return;window.hearts=Math.max(0,(window.hearts||0)-1);updateHearts();renderTrainMeta();if(window.hearts<=0){endTraining(false);return false}return true}
+function renderTrainMeta(){let p=pcur();trainMeta.innerHTML=p?`<b>${emoji(p.type)} ${p.name}</b><p class="small">Niv.${p.level} • durée ${trainingDuration()}s • coût 1⚡ après séance • gain ${trainingXpValue()} XP/réponse</p>`:"Aucun";score.textContent=window.score||0;updateHearts();time.textContent=window.time??30;dir.textContent=window.dir?({up:"⬆ Haut",down:"⬇ Bas",left:"⬅ Gauche",right:"➡ Droite"}[window.dir]):"-";["up","down","left","right"].forEach(id=>document.getElementById(id).classList.toggle("expected",window.dir===id))}
+function renderMissionDrawer(){let m=missions[missionId];let h=`<div class="card"><h3>${m.emoji} ${m.name}</h3><p class="small">Sessions. Coût: 2 énergie par P’TIPOTE et par session.</p><label>Sessions: <select id="sessionsSel"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label><div class="actions"><button id="playerMode" class="warning">Faire par le joueur</button></div></div>`;h+=state.ptipotes.map(p=>`<label class="pti"><input type="checkbox" class="mcheck" value="${p.id}" ${p.status!=="home"?"disabled":""}> ${emoji(p.type)} <b>${p.name}</b> • ${p.type} • ⚡${p.energy}/${p.maxEnergy} • ${status(p)}</label>`).join("");h+=`<div class="actions"><button id="sendTeam">Envoyer équipe</button></div>`;missionList.innerHTML=h;sendTeam.onclick=()=>{let ids=[...document.querySelectorAll(".mcheck:checked")].map(x=>x.value);startMission(ids,+sessionsSel.value)};playerMode.onclick=()=>{pendingExternal=missionId;closeDrawer("mission");loadExternal();go("external")}}
+function startMission(ids,sessions){if(!ids.length){toast("Choisis équipe");return}let m=missions[missionId],team=ids.map(pby),cost=2*sessions;if(team.some(p=>p.energy<cost||p.status!=="home")){toast("Énergie insuffisante");return}let speed=1;team.forEach(p=>{if(m.pref.includes(p.type))speed+=.15});let now=Date.now(),dur=Math.round((m.dur*sessions)/speed);team.forEach(p=>{spendStart(p,cost);p.status="mission";p.mission=missionId;p.sessions=sessions;p.missionStart=now;p.missionEnd=now+dur});closeDrawer("mission");render()}
+function renderMonitor(){let cards=[];state.ptipotes.filter(p=>p.status==="mission"||p.status==="mission_done").forEach(p=>{let m=missions[p.mission],prog=p.status==="mission_done"?100:Math.max(0,Math.min(100,Math.round(((Date.now()-p.missionStart)/(p.missionEnd-p.missionStart))*100)));cards.push(`<div class="mission"><span class="badge">${m.emoji} ${m.name}</span><h4>${emoji(p.type)} ${p.name}</h4><p class="small">${p.sessions||1} session(s) • récompense: ${m.reward==="money"?"argent":"🍃/🪨"} • XP: ${(p.sessions||1)*10}</p><div class="progress"><div class="bar" style="width:${prog}%"></div></div><button onclick="claimMission('${p.id}')" ${p.status!=="mission_done"?"disabled":""}>${p.status==="mission_done"?"Récupérer":"En cours"}</button></div>`)});state.craftQueue.forEach((j,i)=>cards.push(craftCard(j,i)));if(state.market)cards.push(`<div class="mission"><span class="badge">🏪 Marché</span><h4>${pby(state.market.pid)?.name||"Vendeur"}</h4><p class="small">Prochain client ${Math.max(0,Math.ceil((state.market.next-Date.now())/1000))}s</p></div>`);missionMonitor.innerHTML=cards.join("")||'<div class="pti">Aucun P’TIPOTE en mission.</div>'}
+function claimMission(id){let p=pby(id),m=missions[p.mission];if(!p||p.status!=="mission_done")return;if(m.reward==="money"){state.money+=Math.round((m.money||30)*(p.sessions||1)*(1+p.level*.05))}else{let qty=Math.min(6,Math.max(1,Math.ceil(p.level/2)))*(p.sessions||1);for(let i=0;i<qty;i++){let org=p.type==="Végétal"?70:p.type==="Minéral"?30:50;if(Math.random()*100<org)state.organic++;else state.mineral++}}addXp(p,(p.sessions||1)*10);p.status=p.postActionSleep?"sleep":(artisans.includes(p.id)?"workshop":"home");if(p.status==="sleep")p.sleepLast=Date.now();p.postActionSleep=false;p.mission=null;p.sessions=0;render()}
+
+function renderWorkshop(){processCraft();cratePanel.innerHTML=`<p>Caisses: <b>${state.crates}</b>/5. Première gratuite. Prix prochaine caisse: ${state.crates>=5?'MAX':10*Math.pow(2,state.crates-1)+'💰'}</p><button id="buyCrate">Acheter caisse</button>`;buyCrate.onclick=()=>{if(state.crates>=5)return toast("Max caisses");let cost=10*Math.pow(2,state.crates-1);if(state.money<cost)return toast("Pas assez d’argent");state.money-=cost;state.crates++;render()};artisanList.innerHTML=state.ptipotes.map(p=>`<label class="pti"><input type="checkbox" class="artisan-check" value="${p.id}" ${artisans.includes(p.id)?"checked":""} ${!(p.status==="home"||p.status==="workshop")?"disabled":""}> <b>${emoji(p.type)} ${p.name}</b><p class="small">${p.type} • ${status(p)} • ⚡${p.energy}/${p.maxEnergy}</p><p class="small">Poste atelier : ${artisans.includes(p.id)?"✅ assigné":"—"}</p></label>`).join("")||'<div class="pti">Aucun P’TIPOTE.</div>';artisanList.querySelectorAll(".artisan-check").forEach(ch=>ch.onchange=()=>{let p=pby(ch.value);if(ch.checked&&!artisans.includes(ch.value)){artisans.push(ch.value);if(p&&p.status==="home")p.status="workshop"}else{artisans=artisans.filter(id=>id!==ch.value);if(p&&p.status==="workshop")p.status="home"}renderWorkshop();renderRoom();renderBio()});const qs=[1,2,3,4,5,10,"∞"];function row(item,label,cost){return `<div class="pti"><b>${label}</b><p class="small">${cost}</p><div class="actions qty">${qs.map(q=>`<button onclick="addCraftBatch('${item}','${q}')">${q}</button>`).join("")}</div></div>`}craftQueue.innerHTML=row("drink","🥤 Boisson","1 🍃")+row("meal","🍱 Plat","2 🍃")+row("menu","🍽️ Menu","1 🥤 + 1 🍱")+row("filter","🧰 Filtre","1 🪨")+row("pump","⚙️ Pompe","1 🪨 + 1 🍃")+row("system","🎒 Filtration portative","1 🧰 + 1 ⚙️")+'<hr><h3>File d’attente</h3>'+(state.craftQueue.length?state.craftQueue.map(craftCard).join(""):'<div class="pti">File vide.</div>')}
+function craftCard(j,i){let p=pby(j.pid),prog=j.done?100:(j.active?Math.max(0,Math.min(100,Math.round(((Date.now()-j.start)/(j.end-j.start))*100))):0);let labels={drink:"Boisson 🥤",meal:"Plat 🍱",menu:"Menu 🍽️",filter:"Filtre 🧰",pump:"Pompe ⚙️",system:"Filtration portative 🎒"};return`<div class="mission"><span class="badge">${j.done?"Terminé":(j.active?"En cours":"En attente")}</span><b>${labels[j.item]||j.item}</b><p class="small">${p?p.name:"En attente d’artisan"}</p><div class="progress"><div class="bar" style="width:${prog}%"></div></div></div>`}
+function addCraftBatch(item,qty){qty=qty==="∞"?999:parseInt(qty);for(let i=0;i<qty;i++){let before=state.craftQueue.length;addCraft(item);if(state.craftQueue.length===before||state.craftQueue.length>=state.crates)break}}
+function addCraft(item){if(state.craftQueue.length>=state.crates)return toast("Pas de caisse libre");if(item==="drink"){if(state.organic<1)return toast("Il faut 1 organique");state.organic--}else if(item==="meal"){if(state.organic<2)return toast("Il faut 2 organiques");state.organic-=2}else if(item==="menu"){if(state.drinks<1||state.meals<1)return toast("Il faut 1 boisson et 1 plat");state.drinks--;state.meals--}else if(item==="filter"){if(state.mineral<1)return toast("Il faut 1 minéral");state.mineral--}else if(item==="pump"){if(state.mineral<1||state.organic<1)return toast("Il faut 1 minéral et 1 organique");state.mineral--;state.organic--}else if(item==="system"){if(state.filters<1||state.pumps<1)return toast("Il faut 1 filtre et 1 pompe");state.filters--;state.pumps--}state.craftQueue.push({item,pid:null,start:null,end:null,done:false,active:false});processCraft();render()}
+function findAvailableArtisan(){return artisans.map(pby).find(p=>p&&(p.status==="home"||p.status==="workshop")&&p.energy>=1)}
+function startQueuedCraft(job){let p=findAvailableArtisan();if(!p)return false;spendStart(p,1);p.status="workshop";job.pid=p.id;job.active=true;job.done=false;job.start=Date.now();let dur=30000;if(["drink","meal","menu"].includes(job.item)&&(p.type==="Végétal"||p.type==="Fongique"))dur*=.9;if(["filter","pump","system"].includes(job.item)&&p.type==="Fongique")dur*=.95;job.end=Date.now()+Math.round(dur);return true}
+function processCraft(){let now=Date.now();state.craftQueue.slice().forEach(j=>{if(j.active&&!j.done&&now>=j.end){if(j.item==="drink")state.drinks++;else if(j.item==="meal")state.meals++;else if(j.item==="menu")state.menus++;else if(j.item==="filter")state.filters++;else if(j.item==="pump")state.pumps++;else if(j.item==="system")state.systems++;let p=pby(j.pid);if(p){addXp(p,5);p.status=p.postActionSleep?"sleep":(artisans.includes(p.id)?"workshop":"home");if(p.status==="sleep")p.sleepLast=Date.now();p.postActionSleep=false}j.autoCollected=true}});state.craftQueue=state.craftQueue.filter(j=>!j.autoCollected);state.craftQueue.forEach(j=>{if(!j.active&&!j.done)startQueuedCraft(j)})}
+
+function renderMarket(){if(state.market&&!pby(state.market.pid))state.market=null;state.ptipotes.forEach(p=>{if(p.status==="market"&&(!state.market||state.market.pid!==p.id))p.status="home"});sellerList.innerHTML=state.ptipotes.map(p=>`<div class="pti"><b>${emoji(p.type)} ${p.name}</b><p>${status(p)} • chance ${10+(p.type==="Fongique"?5:0)}%</p><button data-sell="${p.id}" ${p.status!=="home"||state.market?"disabled":""}>Mettre au marché</button></div>`).join("");sellerList.querySelectorAll("[data-sell]").forEach(b=>b.onclick=()=>{let p=pby(b.dataset.sell);if(!spendStart(p,1))return;p.status="market";state.market={pid:p.id,next:Date.now()+30000,lastEnergy:Date.now()};render()});if(!state.market){marketStatus.innerHTML='<div class="pti">Aucun vendeur.</div>';return}let p=pby(state.market.pid);marketStatus.innerHTML=`<p>${p?p.name:"Vendeur"} vend. Prochain client: ${Math.max(0,Math.ceil((state.market.next-Date.now())/1000))}s. Chance ${10+(p&&p.type==="Fongique"?5:0)}%</p><button id="stopMarket" class="secondary">Retirer du marché</button>`;stopMarket.onclick=()=>{if(p)p.status="home";state.market=null;render()}}
+function processMarket(){if(!state.market)return;let p=pby(state.market.pid);if(!p){state.market=null;return}let now=Date.now();if(now-state.market.lastEnergy>=60000){if(!spendStart(p,1)){state.market=null;return}state.market.lastEnergy=now}if(now>=state.market.next){let chance=10+(p.type==="Fongique"?5:0);if(Math.random()*100<chance){if(state.systems>0){state.systems--;state.money+=12;addXp(p,10);toast("Filtration vendue +10 XP")}else if(state.menus>0){state.menus--;state.money+=8;addXp(p,10);toast("Menu vendu +10 XP")}else if(state.pumps>0){state.pumps--;state.money+=6;addXp(p,10);toast("Pompe vendue +10 XP")}else if(state.meals>0){state.meals--;state.money+=4;addXp(p,10);toast("Plat vendu +10 XP")}else if(state.filters>0){state.filters--;state.money+=3;addXp(p,10);toast("Filtre vendu +10 XP")}else if(state.drinks>0){state.drinks--;state.money+=2;addXp(p,10);toast("Boisson vendue +10 XP")}}state.market.next=now+30000}}
+
+function renderVillage(){let c=villageCanvas,ctx=c.getContext("2d");ctx.clearRect(0,0,720,480);ctx.fillStyle="#7f9a72";ctx.fillRect(0,0,720,480);ctx.fillStyle="#cdbb9e";ctx.fillRect(330,0,70,480);ctx.fillRect(0,225,720,70);ctx.fillRect(35,60,80,250);ctx.fillRect(595,65,80,250);pois.forEach(p=>{let isMission=["defense","search","caravan"].includes(p.type);ctx.fillStyle=isMission?"#6f8aa0":(p.type==="decor"?"#8f735f":"#9c7d63");ctx.fillRect(p.x,p.y,p.w,p.h);ctx.strokeStyle="rgba(0,0,0,.25)";ctx.strokeRect(p.x,p.y,p.w,p.h);if(!isMission){ctx.fillStyle="#6c5142";ctx.beginPath();ctx.moveTo(p.x-5,p.y+5);ctx.lineTo(p.x+p.w/2,p.y-16);ctx.lineTo(p.x+p.w+5,p.y+5);ctx.closePath();ctx.fill()}ctx.font="26px Arial";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillStyle="#111";ctx.fillText(p.emoji,p.x+p.w/2,p.y+p.h/2);ctx.fillStyle="#243038";ctx.font="12px Arial";ctx.textBaseline="alphabetic";ctx.fillText(p.name,p.x+p.w/2,p.y+p.h+14)})}
+function placeFromCanvasClick(evt){let rect=villageCanvas.getBoundingClientRect(),x=(evt.clientX-rect.left)*(villageCanvas.width/rect.width),y=(evt.clientY-rect.top)*(villageCanvas.height/rect.height);return pois.find(p=>x>=p.x&&x<=p.x+p.w&&y>=p.y&&y<=p.y+p.h)}
+function openPlace(type){if(type==="home")go("home");else if(type==="shop")go("shop");else if(type==="workshop")go("workshop");else if(type==="market")go("market");else if(["defense","search","caravan"].includes(type)){missionId=type;openDrawer("mission");renderMissionDrawer()}else if(type==="zone1")alert("Zone 1 plus tard");else toast("Décor")}
+
+let invTab="stock";
+function renderInventory(){let html="";if(invTab==="stock"){html=`<div class="pti"><b>🍃 Organique</b><p>${state.organic}</p></div><div class="pti"><b>🪨 Minéral</b><p>${state.mineral}</p></div><div class="pti"><b>🥤 Boisson</b><p>${state.drinks}</p></div><div class="pti"><b>🍱 Plat</b><p>${state.meals}</p></div><div class="pti"><b>🍽️ Menu</b><p>${state.menus}</p></div><div class="pti"><b>🧰 Filtre</b><p>${state.filters}</p></div><div class="pti"><b>⚙️ Pompe</b><p>${state.pumps}</p></div><div class="pti"><b>🎒 Filtration portative</b><p>${state.systems}</p></div>`}else if(invTab==="equip"){html=state.envelopes.map(e=>{let p=e.equippedTo?pby(e.equippedTo):null;return `<div class="pti"><b>👕 ${e.name}</b><p class="small">${p?`Déjà équipée<br>sur ${p.name}`:"Disponible"}</p><button onclick="equipEnv('${e.id}')" ${p?"disabled":""}>Équiper</button></div>`}).join("")+state.ptibugs.map(b=>{let p=b.equippedTo?pby(b.equippedTo):null;return `<div class="pti"><b>🍄 ${b.name}</b><p class="small">${p?`Déjà équipé<br>sur ${p.name}`:"Disponible"}</p></div>`}).join("")}else{html=`<div class="pti"><b>🎒 Extension sac +3</b><p>${state.upgrades.bag3}</p><button onclick="upgradeBag()" ${state.upgrades.bag3<=0?"disabled":""}>Utiliser sur la première enveloppe équipée</button></div>`}invPanel.innerHTML=html}
+function renderWardrobe(){wardrobeContent.innerHTML=state.ptipotes.map(p=>{let env=state.envelopes.find(e=>e.equippedTo===p.id);let slots="";for(let i=0;i<(env?env.slots:0);i++)slots+=`<div class="slot">${i===0?"🍱":i===1?"🧰":""}</div>`;return `<div class="card"><h3>${emoji(p.type)} ${p.name}</h3><p class="small">Enveloppe : ${env?env.name:"Aucune"}</p><div class="bag">${slots}</div></div>`}).join("")||'<div class="pti">Aucun P’TIPOTE.</div>'}
+function equipEnv(id){let env=state.envelopes.find(e=>e.id===id);let target=state.ptipotes.find(p=>!state.envelopes.some(x=>x.equippedTo===p.id));if(!target)return toast("Tous les P’TIPOTES ont une enveloppe");env.equippedTo=target.id;render()}
+function upgradeBag(){if(state.upgrades.bag3<=0)return toast("Aucune extension");let env=state.envelopes.find(e=>e.equippedTo);if(!env)return toast("Aucune enveloppe équipée");env.slots+=3;state.upgrades.bag3--;render()}
+
+function render(){update();hud();renderBio();renderRoom();renderSheet();renderTrainList();renderLevels();renderTrainMeta();renderWorkshop();renderMarket();renderVillage();renderInventory();renderWardrobe();save()}
+function openDrawer(t){overlay.classList.add("show");if(t==="train")drawerTrain.classList.add("open");if(t==="mission")drawerMission.classList.add("open")}
+function closeDrawer(t){if(t==="train")drawerTrain.classList.remove("open");if(t==="mission")drawerMission.classList.remove("open");if(!drawerTrain.classList.contains("open")&&!drawerMission.classList.contains("open"))overlay.classList.remove("show")}
+function feedP(){let p=pcur();if(!canFeed(p)||state.food<=0)return toast("Impossible de nourrir");state.food--;p.energy=Math.min(p.maxEnergy,p.energy+2);if(p.energy>=Math.ceil(p.maxEnergy/3)&&p.status==="sleep")p.status="home";render()}
+function cuddleP(){let p=pcur();if(p&&p.status==="home"){p.cuddle=Math.min(3,p.cuddle+1);render()}}
+function trainingDuration(){return 10+(trainDiff-1)*5}
+function startTraining(){let p=pcur();if(!p||p.status!=="home"||p.energy<1)return toast("Énergie insuffisante");window.score=0;window.hearts=3;window.time=trainingDuration();active=true;nextDir();clearInterval(tick);tick=setInterval(()=>{window.time--;if(window.time<=0)endTraining(true);renderTrainMeta()},1000)}
+function nextDir(){if(!active)return;window.dir=["up","down","left","right"][Math.floor(Math.random()*4)];renderTrainMeta();clearTimeout(answerT);answerT=setTimeout(()=>{if(!active)return;if(loseHeart())nextDir()},(3-(trainDiff-1)*.35)*1000)}
+function input(d){if(!active)return;if(d===window.dir){let gain=trainingXpValue(),p=pcur();window.score+=gain;addXp(p,gain);nextDir()}else loseHeart();renderTrainMeta();save()}
+function endTraining(success){let p=pcur();active=false;clearInterval(tick);clearTimeout(answerT);window.dir=null;if(p&&p.status==="home"){spendStart(p,1);if(success){p.trainingDone=p.trainingDone||{};p.trainingDone[trainDiff]=(p.trainingDone[trainDiff]||0)+1}if(p.postActionSleep){p.status="sleep";p.sleepLast=Date.now();p.postActionSleep=false}}render()}
+function loadExternal(){miniFrame.srcdoc=`<html><body style="font-family:Arial;text-align:center;padding:20px"><h3>Mini-jeu ${missions[pendingExternal].name}</h3><p>HTML interchangeable plus tard.</p></body></html>`}
+function externalReward(){let m=missions[pendingExternal];if(m.reward==="money")state.money+=(m.money||30)+20;else{state.organic++;state.mineral++}go("village")}
+
+scan.onclick=()=>addP(false);loan.onclick=()=>addP(true);reset.onclick=()=>{localStorage.removeItem(KEY);location.reload()};
+goBio.onclick=()=>go("bio");goTrain.onclick=()=>openDrawer("train");goRoom.onclick=()=>go("room");goVillage.onclick=()=>go("village");
+missionHud.onclick=()=>{bioTab="missions";go("bio")};tabP.onclick=()=>{bioTab="ptipotes";render()};tabM.onclick=()=>{bioTab="missions";render()};tabH.onclick=()=>{bioTab="house";render()};
+feed.onclick=feedP;cuddle.onclick=cuddleP;trainFrom.onclick=()=>openDrawer("train");missionFrom.onclick=()=>{missionId="defense";openDrawer("mission");renderMissionDrawer()};
+startTrain.onclick=startTraining;up.onclick=()=>input("up");down.onclick=()=>input("down");left.onclick=()=>input("left");right.onclick=()=>input("right");
+closeTrain.onclick=()=>closeDrawer("train");closeMission.onclick=()=>closeDrawer("mission");overlay.onclick=()=>{closeDrawer("train");closeDrawer("mission")};
+addDrink.onclick=()=>addCraft("drink");addMeal.onclick=()=>addCraft("meal");addMenu.onclick=()=>addCraft("menu");addFilter.onclick=()=>addCraft("filter");addPump.onclick=()=>addCraft("pump");addSystem.onclick=()=>addCraft("system");
+buyFood.onclick=()=>{if(state.money<6)return toast("Pas assez d’argent");state.money-=6;state.food++;render()};
+simulateWin.onclick=externalReward;invStockBtn.onclick=()=>{invTab="stock";renderInventory()};invEquipBtn.onclick=()=>{invTab="equip";renderInventory()};invUpgradeBtn.onclick=()=>{invTab="upgrade";renderInventory()};document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go));
+villageCanvas.addEventListener("click",e=>{let p=placeFromCanvasClick(e);if(p)openPlace(p.type)});
+setInterval(()=>{update();hud();if(screens.bio.classList.contains("active"))renderBio();if(screens.room.classList.contains("active"))renderRoom();if(screens.sheet.classList.contains("active"))renderSheet();if(screens.workshop.classList.contains("active"))renderWorkshop();if(screens.market.classList.contains("active"))renderMarket();if(screens.village.classList.contains("active"))renderVillage();save()},1000);
+window.addEventListener("load",()=>{render();renderVillage()});
+render();
+</script>
+</body>
+</html>
