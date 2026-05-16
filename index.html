@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>PTIPOTE Proto Zone 0 V8.6.1</title>
+<title>PTIPOTE Proto Zone 0 V8.6.2</title>
 <style>
 :root{--bg:#314149;--paper:#f2ecdf;--paper2:#e5dccb;--text:#243038;--green:#7a9c8a;--gold:#d3a85f;--red:#b36a5e;--blue:#6f8aa0;--road:#cdbb9e;--grass:#7f9a72;--wall:#8f735f}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{touch-action:manipulation;-webkit-text-size-adjust:100%}
@@ -28,17 +28,19 @@ button.secondary{background:#6b7f8c}button.warning{background:var(--gold);color:
 #villageCanvas{width:720px;max-width:100%;height:auto;aspect-ratio:3/2;background:#7f9a72;border-radius:16px;display:block;margin:auto;box-shadow:0 2px 12px rgba(0,0,0,.25);cursor:pointer}
 .plus{border:2px dashed #8aa28f;background:#eef0e4}.houseup{border:2px dashed #d3a85f;background:#f7edd8}
 .bag{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.slot{width:42px;height:42px;border-radius:8px;background:#d8d2c4;display:flex;align-items:center;justify-content:center}.qty button{min-width:46px}
-.blink{animation:blinkMission .8s infinite alternate}@keyframes blinkMission{from{filter:brightness(1)}to{filter:brightness(1.85);color:#ffd37a}}
+.blink{animation:blinkMission .8s infinite alternate}.alert{color:#ffd37a}@keyframes blinkMission{from{filter:brightness(1)}to{filter:brightness(1.85);color:#ffd37a}}
 @media(max-width:900px){.grid2,.grid3,.house,.levels{grid-template-columns:1fr}header{align-items:flex-start}.stats{font-size:13px;gap:8px}main{padding:10px}.card,.zone,.pti,.mission{padding:12px}.actions button,.actions select{min-height:44px}}
 </style>
 </head>
 <body>
 <header>
-<div><strong>PTIPOTE Proto Zone 0 - V8.6.1</strong><div class="small" id="screenName">Maison</div></div>
+<div><strong>PTIPOTE Proto Zone 0 - V8.6.2</strong><div class="small" id="screenName">Maison</div></div>
 <div class="stats">
 <span>💰 <b id="money">0</b></span>
 <span>🍲 Frigo <b id="food">3</b></span>
 <span class="hud-click" id="missionHud">📦 Missions <b id="missionsCount">0</b></span>
+<span class="hud-click" id="craftHud">⚙️ Craft <b id="craftCount">0</b></span>
+<span class="hud-click" id="marketHud">🛒 Vente <b id="marketCount">0</b></span>
 <button data-go="inventory">📦 Inventaire</button>
 
 <span style="display:none">🍃 <b id="organic">0</b></span><span style="display:none">🪨 <b id="mineral">0</b></span>
@@ -137,7 +139,7 @@ button.secondary{background:#6b7f8c}button.warning{background:var(--gold);color:
 <div id="toast" class="toast"></div>
 
 <script>
-const KEY="ptipote_v8_6_1";
+const KEY="ptipote_zone0_save";
 const screens=["home","bio","room","sheet","train","village","shop","workshop","market","external","inventory","wardrobe"].reduce((a,id)=>(a[id]=document.getElementById(id),a),{});
 const names={home:"Maison",bio:"Bio-ordinateur",room:"Chambre",sheet:"Fiche",train:"Entraînement",village:"Village",shop:"Boutique",workshop:"Cuisine / Atelier",market:"Marché",external:"Mini-jeu externe",inventory:"Inventaire",wardrobe:"Garde-robe"};
 const types=["Végétal","Minéral","Fongique"];
@@ -496,6 +498,83 @@ document.addEventListener("touchend", function(e){
   if(now - lastTouchEndV861 <= 350) e.preventDefault();
   lastTouchEndV861 = now;
 }, {passive:false});
+
+
+// ===== PATCH V8.6.2 =====
+function hasSellableStockV862(){
+  return (state.systems||0)+(state.menus||0)+(state.pumps||0)+(state.meals||0)+(state.filters||0)+(state.drinks||0)>0;
+}
+const baseHud862=hud;
+hud=function(){
+  baseHud862();
+  if(window.craftCount) craftCount.textContent=(state.craftQueue||[]).length;
+  if(window.marketCount){
+    if(state.market&&!hasSellableStockV862()){marketCount.textContent="⚠️";marketHud.classList.add("alert")}
+    else{marketCount.textContent=state.market?1:0;marketHud.classList.remove("alert")}
+  }
+  if(window.craftHud) craftHud.onclick=()=>go("workshop");
+  if(window.marketHud) marketHud.onclick=()=>go("market");
+};
+
+function craftInfo862(item){
+  return {
+    drink:{label:"🥤 Boisson",cost:{organic:1},txt:"1 🍃"},
+    meal:{label:"🍱 Plat",cost:{organic:2},txt:"2 🍃"},
+    menu:{label:"🍽️ Menu",cost:{drinks:1,meals:1},txt:"1 🥤 + 1 🍱"},
+    filter:{label:"🧰 Filtre",cost:{mineral:1},txt:"1 🪨"},
+    pump:{label:"⚙️ Pompe",cost:{mineral:1,organic:1},txt:"1 🪨 + 1 🍃"},
+    system:{label:"🎒 Filtration portative",cost:{filters:1,pumps:1},txt:"1 🧰 + 1 ⚙️"}
+  }[item];
+}
+function maxCraftable862(item){
+  const d=craftInfo862(item);
+  return Math.min(...Object.keys(d.cost).map(k=>Math.floor((state[k]||0)/d.cost[k])));
+}
+function availableLine862(item){
+  const d=craftInfo862(item);
+  return Object.keys(d.cost).map(k=>`${state[k]||0} disponible / ${d.cost[k]} requis`).join(" • ");
+}
+window.selectedCraft=window.selectedCraft||"drink";
+window.selectedQty=window.selectedQty||"1";
+
+renderWorkshop=function(){
+  processCraft();
+  screens.workshop.innerHTML=`<h2>Cuisine / Atelier</h2>
+  <div class="card"><h3>Caisses de craft</h3><div id="cratePanel"></div></div>
+  <div class="card"><h3>Choisir un ou plusieurs artisans</h3><div id="artisanList" class="grid grid3"></div></div>
+  <div class="card"><h3>Lancer une production</h3><p class="small">Choisis un craft, puis une quantité.</p><div id="craftSelector"></div></div>
+  <div class="card"><h3>File d’attente</h3><div id="craftQueue"></div></div>`;
+
+  cratePanel.innerHTML=`<p>Caisses: <b>${state.crates}</b>/5. Première gratuite. Prix prochaine caisse: ${state.crates>=5?"MAX":10*Math.pow(2,state.crates-1)+"💰"}</p><button id="buyCrate">Acheter caisse</button>`;
+  buyCrate.onclick=()=>{if(state.crates>=5)return toast("Max caisses");let cost=10*Math.pow(2,state.crates-1);if(state.money<cost)return toast("Pas assez d’argent");state.money-=cost;state.crates++;render()};
+
+  artisanList.innerHTML=state.ptipotes.map(p=>`<label class="pti"><input type="checkbox" class="artisan-check" value="${p.id}" ${artisans.includes(p.id)?"checked":""} ${!(p.status==="home"||p.status==="workshop")?"disabled":""}> <b>${emoji(p.type)} ${p.name}</b><p class="small">${p.type} • ${status(p)} • ⚡${p.energy}/${p.maxEnergy}</p><p class="small">Poste atelier : ${artisans.includes(p.id)?"✅ assigné":"—"}</p></label>`).join("")||'<div class="pti">Aucun P’TIPOTE.</div>';
+  artisanList.querySelectorAll(".artisan-check").forEach(ch=>ch.onchange=()=>{let p=pby(ch.value);if(ch.checked&&!artisans.includes(ch.value)){artisans.push(ch.value);if(p&&p.status==="home")p.status="workshop"}else{artisans=artisans.filter(id=>id!==ch.value);if(p&&p.status==="workshop")p.status="home"}save();renderWorkshop();renderRoom();renderBio();hud()});
+
+  let selected=window.selectedCraft||"drink";
+  let qty=window.selectedQty||"1";
+  craftSelector.innerHTML=`<div class="actions">
+    <select id="craftSelect">
+      <option value="drink">🥤 Boisson</option><option value="meal">🍱 Plat</option><option value="menu">🍽️ Menu</option>
+      <option value="filter">🧰 Filtre</option><option value="pump">⚙️ Pompe</option><option value="system">🎒 Filtration portative</option>
+    </select>
+    <select id="qtySelect"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="10">10</option><option value="∞">∞</option></select>
+    <button id="validateCraft" class="warning" type="button">Valider</button>
+  </div>
+  <div class="pti"><b>${craftInfo862(selected).label}</b><p class="small">Coût: ${craftInfo862(selected).txt}</p><p class="small">${availableLine862(selected)}</p><p class="small">Craftable maintenant: <b>${maxCraftable862(selected)}</b></p></div>`;
+
+  craftSelect.value=selected; qtySelect.value=qty;
+  craftSelect.onchange=()=>{window.selectedCraft=craftSelect.value;renderWorkshop()};
+  craftSelect.oninput=()=>{window.selectedCraft=craftSelect.value;renderWorkshop()};
+  qtySelect.onchange=()=>{window.selectedQty=qtySelect.value;renderWorkshop()};
+  qtySelect.oninput=()=>{window.selectedQty=qtySelect.value};
+  validateCraft.onclick=()=>{window.selectedCraft=craftSelect.value;window.selectedQty=qtySelect.value;addCraftBatch(window.selectedCraft,window.selectedQty);save();renderWorkshop();hud()};
+
+  craftQueue.innerHTML=state.craftQueue.length?state.craftQueue.map(craftCard).join(""):'<div class="pti">File vide.</div>';
+};
+
+const baseRender862=render;
+render=function(){baseRender862();hud()};
 
 render();
 </script>
