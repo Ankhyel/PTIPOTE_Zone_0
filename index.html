@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>PTIPOTE Proto Zone 0 V8.6.3</title>
+<title>PTIPOTE Proto Zone 0 V8.6.4</title>
 <style>
 :root{--bg:#314149;--paper:#f2ecdf;--paper2:#e5dccb;--text:#243038;--green:#7a9c8a;--gold:#d3a85f;--red:#b36a5e;--blue:#6f8aa0;--road:#cdbb9e;--grass:#7f9a72;--wall:#8f735f}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{touch-action:manipulation;-webkit-text-size-adjust:100%}
@@ -30,11 +30,29 @@ button.secondary{background:#6b7f8c}button.warning{background:var(--gold);color:
 .bag{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.slot{width:42px;height:42px;border-radius:8px;background:#d8d2c4;display:flex;align-items:center;justify-content:center}.qty button{min-width:46px}
 .blink{animation:blinkMission .8s infinite alternate}.alert{color:#ffd37a}.choice{background:var(--blue)}.choice.active{background:var(--gold);color:#222}.reward-modal{position:fixed;inset:0;background:rgba(20,35,42,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:22px}.reward-box{background:var(--paper);border-radius:20px;padding:22px;max-width:420px;width:100%;box-shadow:0 18px 45px rgba(0,0,0,.25)}.reward-box h3{margin-top:0}.mission-list{display:grid;gap:10px}.pti-row{display:flex;align-items:flex-start;gap:12px}.pti-row input{margin-top:6px;transform:scale(1.2)}@keyframes blinkMission{from{filter:brightness(1)}to{filter:brightness(1.85);color:#ffd37a}}
 @media(max-width:900px){.grid2,.grid3,.house,.levels{grid-template-columns:1fr}header{align-items:flex-start}.stats{font-size:13px;gap:8px}main{padding:10px}.card,.zone,.pti,.mission{padding:12px}.actions button,.actions select{min-height:44px}}
+
+<style id="v864-css">
+body{padding-bottom:88px}
+.bottom-nav{position:fixed;left:0;right:0;bottom:0;z-index:1000;background:rgba(49,65,73,.92);backdrop-filter:blur(10px);display:flex;gap:10px;justify-content:center;padding:10px 14px calc(10px + env(safe-area-inset-bottom))}
+.bottom-nav button{min-width:120px;border-radius:16px}
+.choice{background:var(--blue)}
+.choice.active{background:var(--gold);color:#222}
+.reward-modal{position:fixed;inset:0;background:rgba(20,35,42,.58);z-index:9999;display:flex;align-items:center;justify-content:center;padding:22px}
+.reward-box{background:var(--paper);border-radius:20px;padding:22px;max-width:440px;width:100%;box-shadow:0 18px 45px rgba(0,0,0,.25)}
+.reward-box h3{margin-top:0}
+.mission-list{display:grid;gap:10px}
+.pti-row{display:flex;align-items:flex-start;gap:12px}
+.pti-row input{width:24px;height:24px;flex:0 0 auto}
+.fridge-item{border:2px solid rgba(125,160,140,.35)}
+.stepper{display:flex;align-items:center;gap:12px;margin:12px 0}
+.stepper b{min-width:44px;text-align:center;font-size:26px}
+</style>
+
 </style>
 </head>
 <body>
 <header>
-<div><strong>PTIPOTE Proto Zone 0 - V8.6.3</strong><div class="small" id="screenName">Maison</div></div>
+<div><strong>PTIPOTE Proto Zone 0 - V8.6.4</strong><div class="small" id="screenName">Maison</div></div>
 <div class="stats">
 <span>💰 <b id="money">0</b></span>
 <span>🍲 Frigo <b id="food">3</b></span>
@@ -696,6 +714,342 @@ function equipBugTo(id,pid){
   bug.equippedTo=target.id;
   toast(`${bug.name} équipé sur ${target.name}`);
   save();render();
+}
+
+
+// ===== PATCH V8.6.4 : bottom nav, craft quantities, frigo, mission drawer repair =====
+
+function ensureV864(){
+  state.food = Number(state.food || 0);
+  state.organic = Number(state.organic || 0);
+  state.mineral = Number(state.mineral || 0);
+  ["drinks","meals","menus","filters","pumps","systems","money"].forEach(k=>state[k]=Number(state[k]||0));
+  state.craftQueue = state.craftQueue || [];
+  state.ptipotes = state.ptipotes || [];
+  state.ptipotes.forEach(p=>{
+    if(p.status==="workshop" && !artisans.includes(p.id)) p.status="home";
+    if(p.status==="mission" && (!p.missionEnd || p.missionEnd<Date.now()-86400000)) p.status="home";
+  });
+}
+ensureV864();
+
+function buildBottomNavV864(){
+  if(document.getElementById("bottomNavV864")) return;
+  const nav=document.createElement("div");
+  nav.id="bottomNavV864";
+  nav.className="bottom-nav";
+  nav.innerHTML=`<button id="navHomeV864">🏠 Home</button><button id="navMapV864">🗺️ Map</button>`;
+  document.body.appendChild(nav);
+  navHomeV864.onclick=()=>go("home");
+  navMapV864.onclick=()=>go("village");
+}
+buildBottomNavV864();
+
+function showRewardModalV864(title, lines){
+  const modal=document.createElement("div");
+  modal.className="reward-modal";
+  modal.innerHTML=`<div class="reward-box"><h3>${title}</h3><div>${lines.map(l=>`<p>${l}</p>`).join("")}</div><button id="rewardOkV864">OK</button></div>`;
+  document.body.appendChild(modal);
+  document.getElementById("rewardOkV864").onclick=()=>modal.remove();
+}
+
+function missionHudTextV864(){
+  const done=state.ptipotes.filter(p=>p.status==="mission_done").length;
+  const running=state.ptipotes.filter(p=>p.status==="mission").length;
+  if(done>0)return String(done);
+  if(running>0)return "⏩";
+  return "0";
+}
+function craftUnitsV864(){
+  return (state.craftQueue||[]).reduce((s,j)=>s+(j.remaining||j.qty||1),0);
+}
+function hasSellableStockV864(){
+  return (state.systems||0)+(state.menus||0)+(state.pumps||0)+(state.meals||0)+(state.filters||0)+(state.drinks||0)>0;
+}
+const oldHudV864=hud;
+hud=function(){
+  ensureV864();
+  if(typeof oldHudV864==="function") oldHudV864();
+  if(window.food) food.textContent=state.food;
+  if(window.missionsCount) missionsCount.textContent=missionHudTextV864();
+  if(window.missionHud) missionHud.classList.toggle("blink",state.ptipotes.some(p=>p.status==="mission_done"));
+  if(window.craftCount) craftCount.textContent=craftUnitsV864();
+  if(window.marketCount){
+    if(state.market&&!hasSellableStockV864()){marketCount.textContent="⚠️";marketHud.classList.add("alert")}
+    else{marketCount.textContent=state.market?1:0;marketHud.classList.remove("alert")}
+  }
+  if(window.craftHud) craftHud.onclick=()=>go("workshop");
+  if(window.marketHud) marketHud.onclick=()=>go("market");
+};
+
+function sortedPtipotesByEnergyV864(){
+  return [...state.ptipotes].sort((a,b)=>(b.energy||0)-(a.energy||0));
+}
+
+function renderHomeV864(){
+  screens.home.innerHTML=`<h2>Maison</h2><div class="house">
+  <div class="zone" id="goBio"><span class="badge">Bio-ordinateur</span><h3>Scanner / missions / maison</h3><p class="small">P’TIPOTES, missions, upgrade maison.</p></div>
+  <div class="zone" id="goTrain"><span class="badge">Terrain</span><h3>Entraînement</h3><p class="small">Niveaux verrouillés par pratique.</p></div>
+  <div class="zone" id="goRoom"><span class="badge">Chambre</span><h3>Alcôves</h3><p class="small">Voir tous les P’TIPOTES et acheter des alcôves.</p></div>
+  <div class="zone" data-go="inventory"><span class="badge">Inventaire</span><h3>Stock / frigo</h3><p class="small">Objets, nourriture, équipement.</p></div>
+  </div>`;
+  goBio.onclick=()=>go("bio");
+  goTrain.onclick=()=>openDrawer("train");
+  goRoom.onclick=()=>go("room");
+  screens.home.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go));
+}
+
+const oldGoV864=go;
+go=function(id){
+  oldGoV864(id);
+  if(id==="home")renderHomeV864();
+  if(id==="workshop")renderWorkshop();
+  if(id==="inventory")renderInventoryShellV864();
+  hud();
+};
+
+function craftInfoV864(item){
+  return {
+    drink:{label:"🥤 Boisson",cost:{organic:1},txt:"1 🍃",out:"drinks",xp:1},
+    meal:{label:"🍱 Plat",cost:{organic:2},txt:"2 🍃",out:"meals",xp:1},
+    menu:{label:"🍽️ Menu",cost:{drinks:1,meals:1},txt:"1 🥤 + 1 🍱",out:"menus",xp:2},
+    filter:{label:"🧰 Filtre",cost:{mineral:1},txt:"1 🪨",out:"filters",xp:1},
+    pump:{label:"⚙️ Pompe",cost:{mineral:1,organic:1},txt:"1 🪨 + 1 🍃",out:"pumps",xp:2},
+    system:{label:"🎒 Filtration portative",cost:{filters:1,pumps:1},txt:"1 🧰 + 1 ⚙️",out:"systems",xp:3}
+  }[item];
+}
+function canPayCraftV864(item,qty){
+  const d=craftInfoV864(item);
+  return Object.keys(d.cost).every(k=>(state[k]||0)>=d.cost[k]*qty);
+}
+function payCraftV864(item,qty){
+  const d=craftInfoV864(item);
+  Object.keys(d.cost).forEach(k=>state[k]-=d.cost[k]*qty);
+}
+function maxCraftableV864(item){
+  const d=craftInfoV864(item);
+  return Math.min(...Object.keys(d.cost).map(k=>Math.floor((state[k]||0)/d.cost[k])));
+}
+function availableLineV864(item){
+  const d=craftInfoV864(item);
+  return Object.keys(d.cost).map(k=>`${state[k]||0} disponible / ${d.cost[k]} requis`).join(" • ");
+}
+function findAvailableArtisanV864(){
+  return artisans.map(pby).find(p=>p && (p.status==="home"||p.status==="workshop") && p.energy>=1);
+}
+function startQueuedCraft(job){
+  if(job.active||job.done)return false;
+  const p=findAvailableArtisanV864();
+  if(!p)return false;
+  p.status="workshop";
+  p.energy=Math.max(0,(p.energy||0)-1);
+  job.pid=p.id;
+  job.active=true;
+  let dur=12000;
+  if(["drink","meal","menu"].includes(job.item)&&(p.type==="Végétal"||p.type==="Fongique"))dur*=.9;
+  if(["filter","pump","system"].includes(job.item)&&p.type==="Fongique")dur*=.95;
+  job.end=Date.now()+Math.round(dur);
+  return true;
+}
+function finishOneCraftV864(job){
+  const d=craftInfoV864(job.item);
+  state[d.out]=(state[d.out]||0)+1;
+  const p=pby(job.pid);
+  if(p){
+    addXp(p, d.xp || 1);
+    if(p.energy<=0){p.status="sleep";p.sleepLast=Date.now()}
+    else if(artisans.includes(p.id))p.status="workshop";
+    else p.status="home";
+  }
+  job.remaining=(job.remaining||1)-1;
+  job.active=false;
+  job.pid=null;
+  job.end=null;
+  if(job.remaining<=0)job.done=true;
+}
+function processCraft(){
+  ensureV864();
+  const now=Date.now();
+  state.craftQueue.forEach(j=>{if(j.active&&now>=j.end)finishOneCraftV864(j)});
+  state.craftQueue=state.craftQueue.filter(j=>!j.done);
+  state.craftQueue.forEach(j=>{if(!j.active)startQueuedCraft(j)});
+}
+function craftCard(j,i){
+  const p=pby(j.pid);
+  const total=j.total||j.remaining||1;
+  const done=total-(j.remaining||1);
+  const prog=j.active?Math.min(100,Math.round((Date.now()-(j.end-12000))/12000*100)):0;
+  return `<div class="pti"><b>${craftInfoV864(j.item).label}</b><p class="small">${done}/${total} terminé • ${j.active?`en cours avec ${p?p.name:"?"}`:"en attente"}</p><div class="progress"><div class="bar" style="width:${Math.max(0,prog)}%"></div></div></div>`;
+}
+function addCraftBatch(item,qty){
+  qty=qty==="∞"?maxCraftableV864(item):parseInt(qty||"1");
+  qty=Math.max(1,qty);
+  if(state.craftQueue.length>=state.crates)return toast("Plus de caisse libre");
+  qty=Math.min(qty,maxCraftableV864(item));
+  if(qty<=0)return toast("Ressources insuffisantes");
+  if(!canPayCraftV864(item,qty))return toast("Ressources insuffisantes");
+  payCraftV864(item,qty);
+  state.craftQueue.push({item,qty,remaining:qty,total:qty,pid:null,end:null,done:false,active:false});
+  processCraft();save();renderWorkshop();hud();
+}
+function addCraft(item){addCraftBatch(item,1)}
+
+window.selectedCraft=window.selectedCraft||"drink";
+window.selectedQty=window.selectedQty||"1";
+function craftOptionsV864(){return["drink","meal","menu","filter","pump","system"]}
+function qtyOptionsV864(){return["1","2","3","4","5","10","∞"]}
+
+renderWorkshop=function(){
+  ensureV864();processCraft();
+  screens.workshop.innerHTML=`<h2>Cuisine / Atelier</h2>
+  <div class="card actions"><button data-go="village" class="secondary">🗺️ Retour village</button><button data-go="home" class="secondary">🏠 Maison</button></div>
+  <div class="card"><h3>Caisses de craft</h3><div id="cratePanel"></div></div>
+  <div class="card"><h3>Choisir un ou plusieurs artisans</h3><div id="artisanList" class="mission-list"></div></div>
+  <div class="card"><h3>Lancer une production</h3><p class="small">Choisis une recette et une quantité, puis valide.</p><div id="craftSelector"></div></div>
+  <div class="card"><h3>File d’attente</h3><div id="craftQueue"></div></div>`;
+  screens.workshop.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go));
+  cratePanel.innerHTML=`<p>Caisses: <b>${state.crates}</b>/5. Première gratuite. Prix prochaine caisse: ${state.crates>=5?"MAX":10*Math.pow(2,state.crates-1)+" 💰"}</p><button id="buyCrate">Acheter caisse</button>`;
+  buyCrate.onclick=()=>{if(state.crates>=5)return toast("Max caisses");let cost=10*Math.pow(2,state.crates-1);if(state.money<cost)return toast("Pas assez d’argent");state.money-=cost;state.crates++;save();renderWorkshop()};
+  artisanList.innerHTML=sortedPtipotesByEnergyV864().map(p=>`<label class="pti pti-row"><input type="checkbox" class="artisan-check" value="${p.id}" ${artisans.includes(p.id)?"checked":""} ${!(p.status==="home"||p.status==="workshop")?"disabled":""}><span><b>${emoji(p.type)} ${p.name}</b><br><span class="small">${p.type} • ${status(p)} • ⚡ ${p.energy}/${p.maxEnergy}</span><br><span class="small">Poste atelier : ${artisans.includes(p.id)?"✅ assigné":"—"}</span></span></label>`).join("")||'<div class="pti">Aucun P’TIPOTE.</div>';
+  artisanList.querySelectorAll(".artisan-check").forEach(ch=>ch.onchange=()=>{let p=pby(ch.value);if(ch.checked&&!artisans.includes(ch.value)){artisans.push(ch.value);if(p&&p.status==="home")p.status="workshop"}else{artisans=artisans.filter(id=>id!==ch.value);if(p&&p.status==="workshop")p.status="home"}save();renderWorkshop();renderRoom();renderBio();hud()});
+  const selected=window.selectedCraft||"drink", qty=window.selectedQty||"1";
+  craftSelector.innerHTML=`<div class="actions">${craftOptionsV864().map(k=>`<button type="button" class="choice craft-choice ${k===selected?"active":""}" data-craft="${k}">${craftInfoV864(k).label}</button>`).join("")}</div>
+  <div class="actions">${qtyOptionsV864().map(q=>`<button type="button" class="choice qty-choice ${q===qty?"active":""}" data-qty="${q}">${q}</button>`).join("")}</div>
+  <div class="actions"><button id="validateCraft" class="warning" type="button">Valider</button></div>
+  <div class="pti"><b>${craftInfoV864(selected).label}</b><p class="small">Coût: ${craftInfoV864(selected).txt}</p><p class="small">${availableLineV864(selected)}</p><p class="small">Craftable maintenant: <b>${maxCraftableV864(selected)}</b></p></div>`;
+  craftSelector.querySelectorAll(".craft-choice").forEach(b=>b.onclick=()=>{window.selectedCraft=b.dataset.craft;renderWorkshop()});
+  craftSelector.querySelectorAll(".qty-choice").forEach(b=>b.onclick=()=>{window.selectedQty=b.dataset.qty;renderWorkshop()});
+  validateCraft.onclick=()=>addCraftBatch(window.selectedCraft,window.selectedQty);
+  craftQueue.innerHTML=state.craftQueue.length?state.craftQueue.map(craftCard).join(""):'<div class="pti">File vide.</div>';
+};
+
+function renderMissionDrawer(){
+  let m=missions[missionId];
+  if(!m){missionContent.innerHTML=`<div class="mission"><p>Mission inconnue.</p></div>`;return}
+  missionContent.innerHTML=`<div class="mission"><h3>${m.icon} ${m.name}</h3>
+  <p class="small">Coût: 2 énergie par P’TIPOTE et par session.</p>
+  <label>Sessions: <input id="sessionCount" type="number" min="1" max="10" value="1" style="width:70px"></label>
+  <div class="actions"><button class="warning" id="playerMissionBtn">Faire par le joueur</button></div>
+  <div class="mission-list">${sortedPtipotesByEnergyV864().map(p=>`<label class="pti pti-row"><input type="checkbox" class="mission-pick" value="${p.id}" ${p.status!=="home"?"disabled":""}><span><b>${emoji(p.type)} ${p.name}</b><br><span class="small">${p.type} • ${status(p)} • ⚡ ${p.energy}/${p.maxEnergy}</span></span></label>`).join("")}</div>
+  <button id="sendMission">Envoyer équipe</button></div>`;
+  playerMissionBtn.onclick=()=>{pendingExternal=missionId;closeDrawer("mission");loadExternal();go("external")};
+  sendMission.onclick=()=>{
+    let n=Math.max(1,parseInt(sessionCount.value||"1"));
+    let picks=[...missionContent.querySelectorAll(".mission-pick:checked")].map(x=>pby(x.value));
+    if(!picks.length)return toast("Choisis une équipe");
+    for(let p of picks){if(p.energy<n*2)return toast(`${p.name}: énergie insuffisante`)}
+    picks.forEach(p=>{p.energy-=n*2;p.postActionSleep=p.energy<=0;let speed=(m.fast.includes(p.type)?0.8:1);p.status="mission";p.mission=missionId;p.sessions=n;p.missionEnd=Date.now()+Math.round(25000*n*speed)});
+    closeDrawer("mission");save();render();
+  };
+}
+
+claimMission=function(id){
+  let p=pby(id),m=missions[p&&p.mission];
+  if(!p||p.status!=="mission_done"||!m)return;
+  let lines=[];
+  if(m.reward==="money"){let gain=Math.round((m.money||8)*(p.sessions||1)*(1+p.level*.05)/5);state.money+=gain;lines.push(`+${gain} 💰`)}
+  else{
+    let qty=Math.min(6,Math.max(1,Math.ceil(p.level/2)))*(p.sessions||1)*5;
+    let orgGain=0,minGain=0;
+    for(let i=0;i<qty;i++){let org=p.type==="Végétal"?70:p.type==="Minéral"?30:50;if(Math.random()*100<org){state.organic++;orgGain++}else{state.mineral++;minGain++}}
+    lines.push(`+${orgGain} 🍃 organique`);lines.push(`+${minGain} 🪨 minéral`);
+  }
+  addXp(p,(p.sessions||1)*10);lines.push(`+${(p.sessions||1)*10} XP pour ${p.name}`);
+  p.status=p.postActionSleep?"sleep":(artisans.includes(p.id)?"workshop":"home");
+  if(p.status==="sleep")p.sleepLast=Date.now();
+  p.postActionSleep=false;p.mission=null;p.sessions=0;save();render();showRewardModalV864("Récompense récupérée",lines);
+};
+
+externalReward=function(){
+  let m=missions[pendingExternal],lines=[];
+  if(m&&m.reward==="money"){let gain=Math.round(((m.money||8)+4)/5);state.money+=gain;lines.push(`+${gain} 💰`)}
+  else{state.organic+=5;state.mineral+=5;lines.push("+5 🍃 organique");lines.push("+5 🪨 minéral")}
+  save();go("village");showRewardModalV864("Mission joueur terminée",lines);
+};
+
+function openPlace(type){
+  if(type==="home")go("home");
+  else if(type==="shop")go("shop");
+  else if(type==="workshop")go("workshop");
+  else if(type==="market")go("market");
+  else if(type==="defense"||type==="search"||type==="caravan"){missionId=type;openDrawer("mission");renderMissionDrawer()}
+  else if(type==="zone1")alert("Préparation mission Zone 1");
+  else toast("Décor");
+}
+
+function renderInventoryShellV864(){
+  screens.inventory.innerHTML=`<h2>Inventaire</h2><div class="card actions">
+  <button id="invStockBtn">Stock</button><button id="invFridgeBtn">Frigo</button><button id="invEquipBtn">Équipement</button><button id="invUpBtn">Améliorations</button><button data-go="home" class="secondary">Retour</button>
+  </div><div class="card" id="invPanel"></div>`;
+  invStockBtn.onclick=()=>{invTab="stock";renderInventory()};
+  invFridgeBtn.onclick=()=>{invTab="fridge";renderInventory()};
+  invEquipBtn.onclick=()=>{invTab="equip";renderInventory()};
+  invUpBtn.onclick=()=>{invTab="up";renderInventory()};
+  screens.inventory.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go));
+  renderInventory();
+}
+function transferFoodModalV864(kind,label,ratio){
+  const max=state[kind]||0;
+  if(max<=0)return toast("Aucun objet à transférer");
+  let q=1;
+  const modal=document.createElement("div");
+  modal.className="reward-modal";
+  const draw=()=>{modal.innerHTML=`<div class="reward-box"><h3>Transférer vers le frigo</h3><p>${label} → ${ratio} ration${ratio>1?"s":""} chacune.</p><div class="stepper"><button id="minusFood">−</button><b>${q}</b><button id="plusFood">+</button></div><p class="small">Disponible: ${max}. Gain frigo: ${q*ratio} 🍲</p><div class="actions"><button id="confirmFood">Valider</button><button id="cancelFood" class="secondary">Annuler</button></div></div>`;
+    modal.querySelector("#minusFood").onclick=()=>{q=Math.max(1,q-1);draw()};
+    modal.querySelector("#plusFood").onclick=()=>{q=Math.min(max,q+1);draw()};
+    modal.querySelector("#cancelFood").onclick=()=>modal.remove();
+    modal.querySelector("#confirmFood").onclick=()=>{state[kind]-=q;state.food+=q*ratio;save();modal.remove();renderInventory();hud()};
+  };
+  document.body.appendChild(modal);draw();
+}
+renderInventory=function(){
+  let html="";
+  if(invTab==="stock"){
+    html=`<div class="pti"><b>🍃 Organique</b><p>${state.organic}</p></div><div class="pti"><b>🪨 Minéral</b><p>${state.mineral}</p></div><div class="pti fridge-item" onclick="transferFoodModalV864('drinks','🥤 Boisson',1)"><b>🥤 Boisson</b><p>${state.drinks}</p><p class="small">Cliquer pour transférer au frigo.</p></div><div class="pti fridge-item" onclick="transferFoodModalV864('meals','🍱 Plat',2)"><b>🍱 Plat</b><p>${state.meals}</p><p class="small">Cliquer pour transférer au frigo.</p></div><div class="pti fridge-item" onclick="transferFoodModalV864('menus','🍽️ Menu',4)"><b>🍽️ Menu</b><p>${state.menus}</p><p class="small">Cliquer pour transférer au frigo.</p></div><div class="pti"><b>🧰 Filtre</b><p>${state.filters}</p></div><div class="pti"><b>⚙️ Pompe</b><p>${state.pumps}</p></div><div class="pti"><b>🎒 Filtration portative</b><p>${state.systems}</p></div>`;
+  }else if(invTab==="fridge"){
+    html=`<div class="pti"><b>🍲 Frigo</b><p>${state.food} ration${state.food>1?"s":""}</p><p class="small">Boisson = 1 ration. Plat = 2 rations. Menu = 4 rations.</p></div>`;
+  }else if(invTab==="equip"){
+    html=state.envelopes.map(e=>{let p=e.equippedTo?pby(e.equippedTo):null;let buttons=state.ptipotes.map(pt=>`<button onclick="equipEnvTo('${e.id}','${pt.id}')" ${p&&p.id===pt.id?"disabled":""}>${pt.name}</button>`).join("");return `<div class="pti"><b>👕 ${e.name}</b><p class="small">${p?`Déjà équipée<br>sur ${p.name}`:"Disponible"}</p><div class="actions">${buttons}</div></div>`}).join("")+state.ptibugs.map(b=>{let p=b.equippedTo?pby(b.equippedTo):null;let buttons=state.ptipotes.map(pt=>`<button onclick="equipBugTo('${b.id}','${pt.id}')" ${p&&p.id===pt.id?"disabled":""}>${pt.name}</button>`).join("");return `<div class="pti"><b>🍄 ${b.name}</b><p class="small">${p?`Déjà équipé<br>sur ${p.name}`:"Disponible"}</p><div class="actions">${buttons}</div></div>`}).join("");
+  }else{
+    html=`<div class="pti"><b>🎒 Extension sac +3</b><p>${state.upgrades.bag3}</p><button onclick="upgradeBag()" ${state.upgrades.bag3<=0?"disabled":""}>Utiliser sur la première enveloppe équipée</button></div>`;
+  }
+  invPanel.innerHTML=html;
+};
+
+function feedP(){
+  let p=pcur();
+  if(!p||state.food<=0)return toast("Frigo vide");
+  if(p.status!=="home"&&p.status!=="sleep")return toast("P’TIPOTE occupé");
+  if(p.energy>=p.maxEnergy)return toast("Énergie déjà pleine");
+  state.food--;
+  p.energy=Math.min(p.maxEnergy,p.energy+1);
+  if(p.energy>=Math.ceil(p.maxEnergy/3)&&p.status==="sleep")p.status="home";
+  save();render();
+}
+
+const oldRenderV864=render;
+render=function(){
+  ensureV864();
+  if(typeof oldRenderV864==="function")oldRenderV864();
+  if(screens.home.classList.contains("active"))renderHomeV864();
+  if(screens.workshop.classList.contains("active"))renderWorkshop();
+  if(screens.inventory.classList.contains("active")&&!document.getElementById("invFridgeBtn"))renderInventoryShellV864();
+  hud();
+};
+
+renderHomeV864();
+hud();
+
+
+// ===== PATCH V8.6.4b : boutique en rations =====
+if(typeof buyFood!=="undefined" && buyFood){
+  buyFood.onclick=()=>{
+    if(state.money<6)return toast("Pas assez d’argent");
+    state.money-=6;
+    state.food=(state.food||0)+2;
+    save();render();
+    showRewardModalV864("Plat acheté",["+2 🍲 rations dans le frigo"]);
+  };
 }
 
 render();
