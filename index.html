@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>PTIPOTE Proto Zone 0 V8.6.2</title>
+<title>PTIPOTE Proto Zone 0 V8.6.3</title>
 <style>
 :root{--bg:#314149;--paper:#f2ecdf;--paper2:#e5dccb;--text:#243038;--green:#7a9c8a;--gold:#d3a85f;--red:#b36a5e;--blue:#6f8aa0;--road:#cdbb9e;--grass:#7f9a72;--wall:#8f735f}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{touch-action:manipulation;-webkit-text-size-adjust:100%}
@@ -28,13 +28,13 @@ button.secondary{background:#6b7f8c}button.warning{background:var(--gold);color:
 #villageCanvas{width:720px;max-width:100%;height:auto;aspect-ratio:3/2;background:#7f9a72;border-radius:16px;display:block;margin:auto;box-shadow:0 2px 12px rgba(0,0,0,.25);cursor:pointer}
 .plus{border:2px dashed #8aa28f;background:#eef0e4}.houseup{border:2px dashed #d3a85f;background:#f7edd8}
 .bag{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.slot{width:42px;height:42px;border-radius:8px;background:#d8d2c4;display:flex;align-items:center;justify-content:center}.qty button{min-width:46px}
-.blink{animation:blinkMission .8s infinite alternate}.alert{color:#ffd37a}@keyframes blinkMission{from{filter:brightness(1)}to{filter:brightness(1.85);color:#ffd37a}}
+.blink{animation:blinkMission .8s infinite alternate}.alert{color:#ffd37a}.choice{background:var(--blue)}.choice.active{background:var(--gold);color:#222}.reward-modal{position:fixed;inset:0;background:rgba(20,35,42,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:22px}.reward-box{background:var(--paper);border-radius:20px;padding:22px;max-width:420px;width:100%;box-shadow:0 18px 45px rgba(0,0,0,.25)}.reward-box h3{margin-top:0}.mission-list{display:grid;gap:10px}.pti-row{display:flex;align-items:flex-start;gap:12px}.pti-row input{margin-top:6px;transform:scale(1.2)}@keyframes blinkMission{from{filter:brightness(1)}to{filter:brightness(1.85);color:#ffd37a}}
 @media(max-width:900px){.grid2,.grid3,.house,.levels{grid-template-columns:1fr}header{align-items:flex-start}.stats{font-size:13px;gap:8px}main{padding:10px}.card,.zone,.pti,.mission{padding:12px}.actions button,.actions select{min-height:44px}}
 </style>
 </head>
 <body>
 <header>
-<div><strong>PTIPOTE Proto Zone 0 - V8.6.2</strong><div class="small" id="screenName">Maison</div></div>
+<div><strong>PTIPOTE Proto Zone 0 - V8.6.3</strong><div class="small" id="screenName">Maison</div></div>
 <div class="stats">
 <span>💰 <b id="money">0</b></span>
 <span>🍲 Frigo <b id="food">3</b></span>
@@ -575,6 +575,128 @@ renderWorkshop=function(){
 
 const baseRender862=render;
 render=function(){baseRender862();hud()};
+
+
+// ===== PATCH V8.6.3 =====
+function showRewardModalV863(title, lines){
+  const modal=document.createElement("div");
+  modal.className="reward-modal";
+  modal.innerHTML=`<div class="reward-box"><h3>${title}</h3><div>${lines.map(l=>`<p>${l}</p>`).join("")}</div><button id="rewardOkV863">OK</button></div>`;
+  document.body.appendChild(modal);
+  document.getElementById("rewardOkV863").onclick=()=>modal.remove();
+}
+function missionHudTextV863(){
+  const done=state.ptipotes.filter(p=>p.status==="mission_done").length;
+  const running=state.ptipotes.filter(p=>p.status==="mission").length;
+  if(done>0)return String(done);
+  if(running>0)return "⏩";
+  return "0";
+}
+const baseHud863=hud;
+hud=function(){
+  baseHud863();
+  if(window.missionsCount)missionsCount.textContent=missionHudTextV863();
+  if(window.missionHud)missionHud.classList.toggle("blink",state.ptipotes.some(p=>p.status==="mission_done"));
+};
+function sortedPtipotesByEnergyV863(){return [...state.ptipotes].sort((a,b)=>(b.energy||0)-(a.energy||0));}
+
+claimMission=function(id){
+  let p=pby(id),m=missions[p.mission];
+  if(!p||p.status!=="mission_done")return;
+  let lines=[];
+  if(m.reward==="money"){
+    let gain=Math.round((m.money||8)*(p.sessions||1)*(1+p.level*.05)/5);
+    state.money+=gain;lines.push(`+${gain} 💰`);
+  }else{
+    let qty=Math.min(6,Math.max(1,Math.ceil(p.level/2)))*(p.sessions||1)*5;
+    let orgGain=0,minGain=0;
+    for(let i=0;i<qty;i++){
+      let org=p.type==="Végétal"?70:p.type==="Minéral"?30:50;
+      if(Math.random()*100<org){state.organic++;orgGain++}else{state.mineral++;minGain++}
+    }
+    lines.push(`+${orgGain} 🍃 organique`);
+    lines.push(`+${minGain} 🪨 minéral`);
+  }
+  addXp(p,(p.sessions||1)*10);
+  lines.push(`+${(p.sessions||1)*10} XP pour ${p.name}`);
+  p.status=p.postActionSleep?"sleep":(artisans.includes(p.id)?"workshop":"home");
+  if(p.status==="sleep")p.sleepLast=Date.now();
+  p.postActionSleep=false;p.mission=null;p.sessions=0;
+  save();render();
+  showRewardModalV863("Récompense récupérée",lines);
+};
+externalReward=function(){
+  let m=missions[pendingExternal],lines=[];
+  if(m.reward==="money"){let gain=Math.round(((m.money||8)+4)/5);state.money+=gain;lines.push(`+${gain} 💰`)}
+  else{state.organic+=5;state.mineral+=5;lines.push("+5 🍃 organique");lines.push("+5 🪨 minéral")}
+  save();go("village");showRewardModalV863("Mission joueur terminée",lines);
+};
+
+renderMissionDrawer=function(){
+  let m=missions[missionId];
+  missionContent.innerHTML=`<div class="mission"><h3>${m.icon} ${m.name}</h3>
+  <p class="small">Sessions. Coût: 2 énergie par P’TIPOTE et par session.</p>
+  <label>Sessions: <input id="sessionCount" type="number" min="1" max="10" value="1" style="width:70px"></label>
+  <div class="actions"><button class="warning" onclick="pendingExternal='${missionId}';location.hash='mini-game'">Faire par le joueur</button></div>
+  <div class="mission-list">${sortedPtipotesByEnergyV863().map(p=>`<label class="pti pti-row">
+  <input type="checkbox" class="mission-pick" value="${p.id}" ${p.status!=="home"?"disabled":""}>
+  <span><b>${emoji(p.type)} ${p.name}</b><br><span class="small">${p.type} • ${status(p)} • ⚡ ${p.energy}/${p.maxEnergy}</span></span>
+  </label>`).join("")}</div><button id="sendMission">Envoyer équipe</button></div>`;
+  sendMission.onclick=()=>{
+    let n=Math.max(1,parseInt(sessionCount.value||"1"));
+    let picks=[...missionContent.querySelectorAll(".mission-pick:checked")].map(x=>pby(x.value));
+    if(!picks.length)return toast("Choisis une équipe");
+    for(let p of picks){if(p.energy<n*2)return toast(`${p.name}: énergie insuffisante`)}
+    picks.forEach(p=>{p.energy-=n*2;p.postActionSleep=p.energy<=0;let speed=(m.fast.includes(p.type)?0.8:1);p.status="mission";p.mission=missionId;p.sessions=n;p.missionEnd=Date.now()+Math.round(25000*n*speed)});
+    closeDrawer("mission");render();
+  };
+};
+
+window.selectedCraft=window.selectedCraft||"drink";
+window.selectedQty=window.selectedQty||"1";
+function craftOptionsV863(){return["drink","meal","menu","filter","pump","system"]}
+function qtyOptionsV863(){return["1","2","3","4","5","10","∞"]}
+function craftLabelV863(k){return craftInfo862(k).label}
+
+renderWorkshop=function(){
+  processCraft();
+  screens.workshop.innerHTML=`<h2>Cuisine / Atelier</h2>
+  <div class="card"><h3>Caisses de craft</h3><div id="cratePanel"></div></div>
+  <div class="card"><h3>Choisir un ou plusieurs artisans</h3><div id="artisanList" class="mission-list"></div></div>
+  <div class="card"><h3>Lancer une production</h3><p class="small">Choisis une recette et une quantité, puis valide.</p><div id="craftSelector"></div></div>
+  <div class="card"><h3>File d’attente</h3><div id="craftQueue"></div></div>`;
+  cratePanel.innerHTML=`<p>Caisses: <b>${state.crates}</b>/5. Première gratuite. Prix prochaine caisse: ${state.crates>=5?"MAX":10*Math.pow(2,state.crates-1)+"💰"}</p><button id="buyCrate">Acheter caisse</button>`;
+  buyCrate.onclick=()=>{if(state.crates>=5)return toast("Max caisses");let cost=10*Math.pow(2,state.crates-1);if(state.money<cost)return toast("Pas assez d’argent");state.money-=cost;state.crates++;render()};
+  artisanList.innerHTML=sortedPtipotesByEnergyV863().map(p=>`<label class="pti pti-row"><input type="checkbox" class="artisan-check" value="${p.id}" ${artisans.includes(p.id)?"checked":""} ${!(p.status==="home"||p.status==="workshop")?"disabled":""}><span><b>${emoji(p.type)} ${p.name}</b><br><span class="small">${p.type} • ${status(p)} • ⚡ ${p.energy}/${p.maxEnergy}</span><br><span class="small">Poste atelier : ${artisans.includes(p.id)?"✅ assigné":"—"}</span></span></label>`).join("")||'<div class="pti">Aucun P’TIPOTE.</div>';
+  artisanList.querySelectorAll(".artisan-check").forEach(ch=>ch.onchange=()=>{let p=pby(ch.value);if(ch.checked&&!artisans.includes(ch.value)){artisans.push(ch.value);if(p&&p.status==="home")p.status="workshop"}else{artisans=artisans.filter(id=>id!==ch.value);if(p&&p.status==="workshop")p.status="home"}save();renderWorkshop();renderRoom();renderBio();hud()});
+  const selected=window.selectedCraft||"drink",qty=window.selectedQty||"1";
+  craftSelector.innerHTML=`<div class="actions">${craftOptionsV863().map(k=>`<button type="button" class="choice craft-choice ${k===selected?"active":""}" data-craft="${k}">${craftLabelV863(k)}</button>`).join("")}</div><div class="actions">${qtyOptionsV863().map(q=>`<button type="button" class="choice qty-choice ${q===qty?"active":""}" data-qty="${q}">${q}</button>`).join("")}</div><div class="actions"><button id="validateCraft" class="warning" type="button">Valider</button></div><div class="pti"><b>${craftInfo862(selected).label}</b><p class="small">Coût: ${craftInfo862(selected).txt}</p><p class="small">${availableLine862(selected)}</p><p class="small">Craftable maintenant: <b>${maxCraftable862(selected)}</b></p></div>`;
+  craftSelector.querySelectorAll(".craft-choice").forEach(b=>b.onclick=()=>{window.selectedCraft=b.dataset.craft;renderWorkshop()});
+  craftSelector.querySelectorAll(".qty-choice").forEach(b=>b.onclick=()=>{window.selectedQty=b.dataset.qty;renderWorkshop()});
+  validateCraft.onclick=()=>{addCraftBatch(window.selectedCraft,window.selectedQty);save();renderWorkshop();hud()};
+  craftQueue.innerHTML=state.craftQueue.length?state.craftQueue.map(craftCard).join(""):'<div class="pti">File vide.</div>';
+};
+
+renderInventory=function(){
+  let html="";
+  if(invTab==="stock"){
+    html=`<div class="pti"><b>🍃 Organique</b><p>${state.organic}</p></div><div class="pti"><b>🪨 Minéral</b><p>${state.mineral}</p></div><div class="pti"><b>🥤 Boisson</b><p>${state.drinks}</p></div><div class="pti"><b>🍱 Plat</b><p>${state.meals}</p></div><div class="pti"><b>🍽️ Menu</b><p>${state.menus}</p></div><div class="pti"><b>🧰 Filtre</b><p>${state.filters}</p></div><div class="pti"><b>⚙️ Pompe</b><p>${state.pumps}</p></div><div class="pti"><b>🎒 Filtration portative</b><p>${state.systems}</p></div>`;
+  }else if(invTab==="equip"){
+    html=state.envelopes.map(e=>{let p=e.equippedTo?pby(e.equippedTo):null;let buttons=state.ptipotes.map(pt=>`<button onclick="equipEnvTo('${e.id}','${pt.id}')" ${p&&p.id===pt.id?"disabled":""}>${pt.name}</button>`).join("");return `<div class="pti"><b>👕 ${e.name}</b><p class="small">${p?`Déjà équipée<br>sur ${p.name}`:"Disponible"}</p><div class="actions">${buttons||"<span class='small'>Aucun P’TIPOTE.</span>"}</div></div>`}).join("")+state.ptibugs.map(b=>{let p=b.equippedTo?pby(b.equippedTo):null;let buttons=state.ptipotes.map(pt=>`<button onclick="equipBugTo('${b.id}','${pt.id}')" ${p&&p.id===pt.id?"disabled":""}>${pt.name}</button>`).join("");return `<div class="pti"><b>🍄 ${b.name}</b><p class="small">${p?`Déjà équipé<br>sur ${p.name}`:"Disponible"}</p><div class="actions">${buttons||"<span class='small'>Aucun P’TIPOTE.</span>"}</div></div>`}).join("");
+  }else{
+    html=`<div class="pti"><b>🎒 Extension sac +3</b><p>${state.upgrades.bag3}</p><button onclick="upgradeBag()" ${state.upgrades.bag3<=0?"disabled":""}>Utiliser sur la première enveloppe équipée</button></div>`;
+  }
+  invPanel.innerHTML=html;
+};
+function equipBugTo(id,pid){
+  let bug=state.ptibugs.find(b=>b.id===id),target=pby(pid);
+  if(!bug||!target)return;
+  let previous=state.ptibugs.find(b=>b.equippedTo===target.id);
+  if(previous)previous.equippedTo=null;
+  bug.equippedTo=target.id;
+  toast(`${bug.name} équipé sur ${target.name}`);
+  save();render();
+}
 
 render();
 </script>
